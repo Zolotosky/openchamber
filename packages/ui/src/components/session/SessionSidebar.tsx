@@ -37,7 +37,9 @@ import {
   RiArrowRightSLine,
   RiCheckLine,
   RiCloseLine,
+  RiArchiveDrawerLine,
   RiDeleteBinLine,
+  RiInboxUnarchiveLine,
   RiErrorWarningLine,
   RiFileCopyLine,
   RiFolderAddLine,
@@ -92,6 +94,7 @@ const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
 const PROJECT_ACTIVE_SESSION_STORAGE_KEY = 'oc.sessions.activeSessionByProject';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
 const SESSION_PINNED_STORAGE_KEY = 'oc.sessions.pinned';
+const SESSION_ARCHIVED_STORAGE_KEY = 'oc.sessions.archived';
 
 const formatDateLabel = (value: string | number) => {
   const targetDate = new Date(value);
@@ -600,6 +603,22 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       return new Set();
     }
   });
+
+  const [archivedSessionIds, setArchivedSessionIds] = React.useState<Set<string>>(() => {
+    try {
+      const raw = getSafeStorage().getItem(SESSION_ARCHIVED_STORAGE_KEY);
+      if (!raw) {
+        return new Set();
+      }
+      const parsed = JSON.parse(raw) as string[];
+      return new Set(Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  const [showArchived, setShowArchived] = React.useState(false);
+
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(() => {
     try {
       const raw = getSafeStorage().getItem(GROUP_COLLAPSE_STORAGE_KEY);
@@ -789,6 +808,26 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     }
   }, [pinnedSessionIds, safeStorage]);
 
+  React.useEffect(() => {
+    try {
+      safeStorage.setItem(SESSION_ARCHIVED_STORAGE_KEY, JSON.stringify(Array.from(archivedSessionIds)));
+    } catch {
+      // ignored
+    }
+  }, [archivedSessionIds, safeStorage]);
+
+  const toggleArchivedSession = React.useCallback((sessionId: string) => {
+    setArchivedSessionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
+  }, []);
+
   const togglePinnedSession = React.useCallback((sessionId: string) => {
     setPinnedSessionIds((prev) => {
       const next = new Set(prev);
@@ -804,6 +843,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const sortedSessions = React.useMemo(() => {
     return [...sessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
   }, [sessions, pinnedSessionIds]);
+
+  const activeSessions = React.useMemo(() => {
+    return sortedSessions.filter((s) => !archivedSessionIds.has(s.id));
+  }, [sortedSessions, archivedSessionIds]);
+
+  const archivedSessions = React.useMemo(() => {
+    return sortedSessions.filter((s) => archivedSessionIds.has(s.id));
+  }, [sortedSessions, archivedSessionIds]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1475,9 +1522,35 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         });
       });
 
+      return collected.filter((s) => !archivedSessionIds.has(s.id));
+    },
+    [availableWorktreesByProject, getSessionsByDirectory, sessionsByDirectory, isVSCode, archivedSessionIds],
+  );
+
+  const getArchivedSessionsForProject = React.useCallback(
+    (project: { normalizedPath: string }) => {
+      const worktreesForProject = isVSCode ? [] : (availableWorktreesByProject.get(project.normalizedPath) ?? []);
+      const directories = [
+        project.normalizedPath,
+        ...worktreesForProject
+          .map((meta) => normalizePath(meta.path) ?? meta.path)
+          .filter((value): value is string => Boolean(value)),
+      ];
+      const seen = new Set<string>();
+      const collected: Session[] = [];
+      directories.forEach((directory) => {
+        const sessionsForDirectory = sessionsByDirectory.get(directory) ?? getSessionsByDirectory(directory);
+        sessionsForDirectory.forEach((session) => {
+          if (seen.has(session.id) || !archivedSessionIds.has(session.id)) {
+            return;
+          }
+          seen.add(session.id);
+          collected.push(session);
+        });
+      });
       return collected;
     },
-    [availableWorktreesByProject, getSessionsByDirectory, sessionsByDirectory, isVSCode],
+    [availableWorktreesByProject, getSessionsByDirectory, sessionsByDirectory, isVSCode, archivedSessionIds],
   );
 
   // Keep last-known repo status to avoid UI jiggling during project switch
@@ -2080,6 +2153,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         <RiPushpinLine className="mr-1 h-4 w-4" />
                       )}
                       {isPinnedSession ? 'Unpin session' : 'Pin session'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => toggleArchivedSession(session.id)} className="[&>svg]:mr-1">
+                      {archivedSessionIds.has(session.id) ? (
+                        <RiInboxUnarchiveLine className="mr-1 h-4 w-4" />
+                      ) : (
+                        <RiArchiveDrawerLine className="mr-1 h-4 w-4" />
+                      )}
+                      {archivedSessionIds.has(session.id) ? 'Unarchive' : 'Archive'}
                     </DropdownMenuItem>
                     {!session.share ? (
                       <DropdownMenuItem onClick={() => handleShareSession(session)} className="[&>svg]:mr-1">
@@ -2863,6 +2944,54 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 );
               })}
           </>
+        )}
+        {archivedSessions.length > 0 && (
+          <div className="mt-2 border-t border-border/50 pt-2">
+            <button
+              type="button"
+              className="flex w-full items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setShowArchived((prev) => !prev)}
+            >
+              <RiArchiveDrawerLine className="h-3.5 w-3.5" />
+              <span>Archived ({archivedSessions.length})</span>
+              <svg
+                className={cn('ml-auto h-3 w-3 transition-transform', showArchived && 'rotate-180')}
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M3 4.5L6 7.5L9 4.5" />
+              </svg>
+            </button>
+            {showArchived && (
+              <div className="mt-1 space-y-0.5 opacity-60">
+                {archivedSessions.map((session) => {
+                  const title = session.title || 'Untitled';
+                  return (
+                    <div
+                      key={session.id}
+                      className="group flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                      onClick={() => setCurrentSession(session.id)}
+                    >
+                      <span className="flex-1 truncate">{title}</span>
+                      <button
+                        type="button"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleArchivedSession(session.id);
+                        }}
+                        title="Unarchive"
+                      >
+                        <RiInboxUnarchiveLine className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
       </ScrollableOverlay>
 
