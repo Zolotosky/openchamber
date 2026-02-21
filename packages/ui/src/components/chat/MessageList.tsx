@@ -13,6 +13,7 @@ import { detectTurns, type Turn } from './hooks/useTurnGrouping';
 import { TurnGroupingProvider, useMessageNeighbors, useTurnGroupingContextForMessage, useTurnGroupingContextStatic, useLastTurnMessageIds } from './contexts/TurnGroupingContext';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDeviceInfo } from '@/lib/device';
+import { useAikoStore } from '@/stores/useAikoStore';
 
 interface ChatMessageEntry {
     info: Message;
@@ -469,6 +470,8 @@ const MessageList: React.FC<MessageListProps> = ({
         onMessageContentChange('permission');
     }, [permissions, questions, onMessageContentChange]);
 
+    const showSystemMessages = useAikoStore((s) => s.showSystemMessages);
+
     const baseDisplayMessages = React.useMemo(() => {
         const seenIdsFromTail = new Set<string>();
         const nextNormalizedCache = new Map<string, { source: ChatMessageEntry; normalized: ChatMessageEntry }>();
@@ -538,7 +541,7 @@ const MessageList: React.FC<MessageListProps> = ({
         }
 
         return output;
-    }, [messages]);
+    }, [messages, showSystemMessages]);
 
     const activeRetryStatus = useSessionStore(
         useShallow((state) => {
