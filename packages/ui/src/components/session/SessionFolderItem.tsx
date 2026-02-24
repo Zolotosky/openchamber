@@ -180,6 +180,9 @@ const SessionFolderItemBase = <TSessionNode,>({
                 autoFocus
                 placeholder="Folder name"
                 onClick={(event) => event.stopPropagation()}
+                onBlur={() => {
+                  handleSaveRename();
+                }}
                 onKeyDown={(event) => {
                   if (event.key === 'Escape') {
                     event.stopPropagation();

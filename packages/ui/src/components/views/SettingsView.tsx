@@ -37,6 +37,8 @@ import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar'
 import { CommandsPage } from '@/components/sections/commands/CommandsPage';
 import { McpSidebar } from '@/components/sections/mcp/McpSidebar';
 import { McpPage } from '@/components/sections/mcp/McpPage';
+import { AikoSidebar } from '@/components/sections/aiko/AikoSidebar';
+import { AikoPage } from '@/components/sections/aiko/AikoPage';
 import { SkillsSidebar } from '@/components/sections/skills/SkillsSidebar';
 import { SkillsPage } from '@/components/sections/skills/SkillsPage';
 import { ProjectsSidebar } from '@/components/sections/projects/ProjectsSidebar';
@@ -93,6 +95,7 @@ const pageOrder: SettingsPageSlug[] = [
   'skills.installed',
   'skills.catalog',
   'voice',
+  'aiko',
 ];
 
 function buildRuntimeContext(isDesktop: boolean): SettingsRuntimeContext {
@@ -131,6 +134,9 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
       return RiSlashCommands2;
     case 'mcp':
       return McpIcon;
+
+    case 'aiko':
+      return RiRobot2Line;
 
     case 'skills.installed':
       return RiBookOpenLine;
@@ -385,6 +391,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <CommandsSidebar onItemSelect={opts.onItemSelect} />;
       case 'mcp':
         return <McpSidebar onItemSelect={opts.onItemSelect} />;
+      case 'aiko':
+        return <AikoSidebar onItemSelect={opts.onItemSelect} />;
       case 'skills.installed':
         return <SkillsSidebar onItemSelect={opts.onItemSelect} />;
       case 'providers':
@@ -413,6 +421,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <CommandsPage />;
       case 'mcp':
         return <McpPage />;
+      case 'aiko':
+        return <AikoPage />;
       case 'skills.installed':
         return <SkillsPage view="installed" />;
       case 'skills.catalog':

@@ -23,7 +23,9 @@ import { useDeviceInfo } from '@/lib/device';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
 
-import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
+import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow, ImageStudioView } from '@/components/views';
+import { DashboardView } from '@/components/views/DashboardView';
+import { AnalyzerView } from '@/components/views/AnalyzerView';
 
 // Mobile drawer width as screen percentage
 const MOBILE_DRAWER_WIDTH_PERCENT = 85;
@@ -532,6 +534,8 @@ export const MainLayout: React.FC = () => {
 
     const secondaryView = React.useMemo(() => {
         switch (activeMainTab) {
+            case 'dashboard':
+                return <DashboardView />;
             case 'plan':
                 return <PlanView />;
             case 'git':
@@ -542,6 +546,10 @@ export const MainLayout: React.FC = () => {
                 return <TerminalView />;
             case 'files':
                 return <FilesView />;
+            case 'analyzer':
+                return <AnalyzerView />;
+            case 'image-studio':
+                return <ImageStudioView />;
             default:
                 return null;
         }

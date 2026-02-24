@@ -17,10 +17,10 @@ export const resolveUsageTone = (percent: number | null): 'safe' | 'warn' | 'cri
   if (percent === null) {
     return 'safe';
   }
-  if (percent >= 80) {
+  if (percent >= 90) {
     return 'critical';
   }
-  if (percent >= 50) {
+  if (percent >= 70) {
     return 'warn';
   }
   return 'safe';

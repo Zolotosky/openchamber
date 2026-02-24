@@ -16,7 +16,8 @@ export type SettingsPageSlug =
   | 'shortcuts'
   | 'sessions'
   | 'notifications'
-  | 'voice';
+  | 'voice'
+  | 'aiko';
 
 export type SettingsPageGroup =
   | 'appearance'
@@ -26,7 +27,8 @@ export type SettingsPageGroup =
   | 'git'
   | 'skills'
   | 'usage'
-  | 'advanced';
+  | 'advanced'
+  | 'aiko';
 
 export interface SettingsRuntimeContext {
   isVSCode: boolean;
@@ -53,6 +55,7 @@ export const SETTINGS_GROUP_LABELS: Record<SettingsPageGroup, string> = {
   skills: 'Skills',
   usage: 'Usage',
   advanced: 'Advanced',
+  aiko: 'Aiko',
 };
 
 export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
@@ -159,6 +162,14 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
 
   { slug: 'notifications', title: 'Notifications', group: 'general', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
   { slug: 'voice', title: 'Voice', group: 'advanced', kind: 'single', keywords: ['tts', 'speech', 'voice'], isAvailable: (ctx) => !ctx.isVSCode },
+  {
+    slug: 'aiko',
+    title: 'Aiko',
+    group: 'aiko',
+    kind: 'split',
+    description: 'Aiko AI assistant settings — memory, chat, visual, interface, modules.',
+    keywords: ['aiko', 'assistant', 'memory', 'chat', 'visual', 'interface', 'language', 'modules'],
+  },
 ] as const;
 
 export const LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG: Record<SidebarSection, SettingsPageSlug> = {
