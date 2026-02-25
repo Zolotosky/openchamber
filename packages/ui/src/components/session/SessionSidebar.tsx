@@ -699,240 +699,6 @@ const SortableGroupItemBase: React.FC<{
     attributes,
     listeners,
     setNodeRef,
-    isDragging,
-  } = useSortable({ id });
-
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-
-  return (
-    <div ref={setNodeRef} className={cn('relative', isDragging && 'opacity-40')}>
-      {!hideHeader ? (
-        <>
-          {/* Sentinel for sticky detection */}
-          {isDesktopShell && (
-            <div
-              ref={sentinelRef}
-              data-project-id={id}
-              className="absolute top-0 h-px w-full pointer-events-none"
-              aria-hidden="true"
-            />
-          )}
-
-          {/* Project header - sticky like workspace groups */}
-          <div
-            className={cn(
-              'sticky top-0 z-10 pt-2 pb-1.5 w-full text-left cursor-pointer group/project border-b select-none',
-              !isDesktopShell && 'bg-sidebar',
-            )}
-            style={{
-              backgroundColor: isDesktopShell
-                ? isStuck ? 'var(--sidebar-stuck-bg)' : 'transparent'
-                : undefined,
-              borderColor: isHovered
-                ? 'var(--color-border-hover)'
-                : isCollapsed
-                  ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
-                  : 'var(--color-border)'
-            }}
-            onMouseEnter={() => onHoverChange(true)}
-            onMouseLeave={() => onHoverChange(false)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              if (!isRenaming) {
-                setIsMenuOpen(true);
-              }
-            }}
-          >
-        <div className="relative flex items-center gap-1 px-1" {...attributes}>
-          {isRenaming ? (
-            <form
-              className="flex min-w-0 flex-1 items-center gap-2"
-              data-keyboard-avoid="true"
-              onSubmit={(event) => {
-                event.preventDefault();
-                onRenameSave();
-              }}
-            >
-              <input
-                value={renameValue}
-                onChange={(event) => onRenameValueChange(event.target.value)}
-                className="flex-1 min-w-0 bg-transparent typography-ui-label outline-none placeholder:text-muted-foreground"
-                autoFocus
-                placeholder="Rename project"
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.stopPropagation();
-                    onRenameCancel();
-                    return;
-                  }
-                  if (event.key === ' ' || event.key === 'Enter') {
-                    event.stopPropagation();
-                  }
-                }}
-              />
-              <button
-                type="submit"
-                className="shrink-0 text-muted-foreground hover:text-foreground"
-              >
-                <RiCheckLine className="size-4" />
-              </button>
-              <button
-                type="button"
-                onClick={onRenameCancel}
-                className="shrink-0 text-muted-foreground hover:text-foreground"
-              >
-                <RiCloseLine className="size-4" />
-              </button>
-            </form>
-          ) : (
-            <Tooltip delayDuration={1500}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={onToggle}
-                  {...listeners}
-                  className="flex-1 min-w-0 flex items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-sm cursor-grab active:cursor-grabbing"
-                >
-                  <span className={cn(
-                    "typography-ui font-semibold truncate",
-                    isActiveProject ? "text-primary" : "text-foreground group-hover/project:text-foreground"
-                  )}>
-                    {projectLabel}
-                  </span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                {projectDescription}
-              </TooltipContent>
-            </Tooltip>
-          )}
-
-          {!isRenaming ? (
-            <DropdownMenu
-              open={isMenuOpen}
-              onOpenChange={setIsMenuOpen}
-            >
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
-                    mobileVariant ? 'opacity-70' : 'opacity-0 group-hover/project:opacity-100',
-                  )}
-                  aria-label="Project menu"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <RiMore2Line className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[180px]">
-                {showCreateButtons && isRepo && !hideDirectoryControls && settingsAutoCreateWorktree && onNewSession && (
-                  <DropdownMenuItem onClick={onNewSession}>
-                    <RiAddLine className="mr-1.5 h-4 w-4" />
-                    New Session
-                  </DropdownMenuItem>
-                )}
-                {showCreateButtons && isRepo && !hideDirectoryControls && !settingsAutoCreateWorktree && onNewWorktreeSession && (
-                  <DropdownMenuItem onClick={onNewWorktreeSession}>
-                    <RiGitBranchLine className="mr-1.5 h-4 w-4" />
-                    New Session in Worktree
-                  </DropdownMenuItem>
-                )}
-                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubIssue && (
-                  <DropdownMenuItem onClick={onNewSessionFromGitHubIssue}>
-                    <RiGithubLine className="mr-1.5 h-4 w-4" />
-                    New session from GitHub issue
-                  </DropdownMenuItem>
-                )}
-                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubPR && (
-                  <DropdownMenuItem onClick={onNewSessionFromGitHubPR}>
-                    <RiGitPullRequestLine className="mr-1.5 h-4 w-4" />
-                    New session from GitHub PR
-                  </DropdownMenuItem>
-                )}
-                {showCreateButtons && isRepo && !hideDirectoryControls && (
-                  <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
-                    <ArrowsMerge className="mr-1.5 h-4 w-4" />
-                    New Multi-Run
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={onRenameStart}>
-                  <RiPencilAiLine className="mr-1.5 h-4 w-4" />
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={onClose}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <RiCloseLine className="mr-1.5 h-4 w-4" />
-                  Close Project
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-
-          {showCreateButtons && isRepo && !hideDirectoryControls && onNewWorktreeSession && settingsAutoCreateWorktree && !isRenaming && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onNewWorktreeSession();
-                  }}
-                  className={cn(
-                    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground hover:bg-interactive-hover/50 flex-shrink-0',
-                    mobileVariant ? 'opacity-70' : 'opacity-100',
-                  )}
-                  aria-label="New session in worktree"
-                >
-                  <RiGitBranchLine className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}>
-                <p>New session in worktree</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {showCreateButtons && (!settingsAutoCreateWorktree || !isRepo) && !isRenaming && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onNewSession();
-                  }}
-                  className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label="New session"
-                >
-                  <RiAddLine className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}>
-                <p>New session</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-          </div>
-        </>
-      ) : null}
-
-      {/* Children (workspace groups and sessions) */}
-      {children}
-    </div>
-  );
-};
-
-const SortableGroupItemBase: React.FC<{
-  id: string;
-  children: React.ReactNode;
-}> = ({ id, children }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
     transform,
     transition,
     isDragging,
@@ -1309,7 +1075,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         cancelled = true;
       };
     }
-  };
 
     normalizedProjects.forEach((project) => {
       checkIsGitRepository(project.path)
@@ -3493,6 +3258,56 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </div>
         </>
       )}
+
+      <ScrollableOverlay
+        outerClassName="flex-1 min-h-0"
+        className={cn('space-y-1 pb-1 pl-2.5 pr-1', mobileVariant ? '' : '')}
+      >
+        {projectSections.length === 0 ? (
+          emptyState
+        ) : showOnlyMainWorkspace ? (
+          <div className="space-y-[0.6rem] py-1">
+            {(() => {
+              const activeSection = projectSections.find((section) => section.project.id === activeProjectId) ?? projectSections[0];
+              if (!activeSection) {
+                return emptyState;
+              }
+              // VS Code sessions view typically only shows one workspace, but sessions may live in worktrees or
+              // canonicalized paths. Prefer the main group if it has sessions; otherwise fall back to any group
+              // that contains sessions so we don't show an empty list when sessions exist.
+              const group =
+                activeSection.groups.find((candidate) => candidate.isMain && candidate.sessions.length > 0)
+                ?? activeSection.groups.find((candidate) => candidate.sessions.length > 0)
+                ?? activeSection.groups.find((candidate) => candidate.isMain)
+                ?? activeSection.groups[0];
+              if (!group) {
+                return (
+                  <div className="py-1 text-left typography-micro text-muted-foreground">
+                    No sessions yet.
+                  </div>
+                );
+              }
+              const groupKey = `${activeSection.project.id}:${group.id}`;
+              // In VS Code mode with showOnlyMainWorkspace, hide the group header to show a flat session list
+              return renderGroupSessions(group, groupKey, activeSection.project.id, showOnlyMainWorkspace);
+            })()}
+          </div>
+        ) : (
+          <>
+            {visibleProjectSections.map((section) => {
+                const project = section.project;
+                const projectKey = project.id;
+                const projectLabel = formatProjectLabel(
+                  project.label?.trim()
+                    || formatDirectoryName(project.normalizedPath, homeDirectory)
+                    || project.normalizedPath
+                );
+                const projectDescription = formatPathForDisplay(project.normalizedPath, homeDirectory);
+                const isCollapsed = collapsedProjects.has(projectKey) && hideDirectoryControls;
+                const isActiveProject = projectKey === activeProjectId;
+                const isRepo = projectRepoStatus.get(projectKey);
+                const isHovered = hoveredProjectId === projectKey;
+                const orderedGroups = getOrderedGroups(projectKey, section.groups);
 
                 return (
                   <SortableProjectItem
