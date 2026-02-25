@@ -38,6 +38,7 @@ import { CommandsPage } from '@/components/sections/commands/CommandsPage';
 import { McpSidebar } from '@/components/sections/mcp/McpSidebar';
 import { McpPage } from '@/components/sections/mcp/McpPage';
 import { AikoSidebar } from '@/components/sections/aiko/AikoSidebar';
+import type { AikoSection } from '@/components/sections/aiko/AikoSidebar';
 import { AikoPage } from '@/components/sections/aiko/AikoPage';
 import { SkillsSidebar } from '@/components/sections/skills/SkillsSidebar';
 import { SkillsPage } from '@/components/sections/skills/SkillsPage';
@@ -243,6 +244,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const [mobileStage, setMobileStage] = React.useState<MobileStage>('nav');
   const autoNavSlugRef = React.useRef<string | null>(null);
 
+  const [selectedAikoSection, setSelectedAikoSection] = React.useState<AikoSection>('aiko-language');
+
   const [navWidth, setNavWidth] = React.useState(216);
   const [hasManuallyResized, setHasManuallyResized] = React.useState(false);
   const [isResizing, setIsResizing] = React.useState(false);
@@ -392,7 +395,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       case 'mcp':
         return <McpSidebar onItemSelect={opts.onItemSelect} />;
       case 'aiko':
-        return <AikoSidebar onItemSelect={opts.onItemSelect} />;
+         return <AikoSidebar selectedSection={selectedAikoSection} onSelectSection={setSelectedAikoSection} onItemSelect={opts.onItemSelect} />;
       case 'skills.installed':
         return <SkillsSidebar onItemSelect={opts.onItemSelect} />;
       case 'providers':
@@ -422,7 +425,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       case 'mcp':
         return <McpPage />;
       case 'aiko':
-        return <AikoPage />;
+         return <AikoPage section={selectedAikoSection} />;
       case 'skills.installed':
         return <SkillsPage view="installed" />;
       case 'skills.catalog':

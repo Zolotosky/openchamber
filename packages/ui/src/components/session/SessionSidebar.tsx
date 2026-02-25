@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from '@/components/ui';
+import { copyTextToClipboard } from '@/lib/clipboard';
+import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
 import {
   DndContext,
   DragOverlay,
@@ -26,6 +28,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
@@ -43,6 +48,7 @@ import { GridLoader } from '@/components/ui/grid-loader';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import {
   RiAddLine,
+  RiArrowDownSLine,
   RiArrowRightSLine,
   RiCheckboxBlankLine,
   RiCheckboxLine,
@@ -53,32 +59,54 @@ import {
   RiFileCopyLine,
   RiFolderAddLine,
   RiFolderLine,
-  RiFolderAddLine,
+  RiGitBranchLine,
+  RiGitPullRequestLine,
+  RiGitRepositoryLine,
+  RiNodeTree,
+  RiStickyNoteLine,
+  RiLinkUnlinkM,
+
+  RiGithubLine,
+
   RiMore2Line,
   RiPencilAiLine,
-  RiDeleteBinLine,
-  RiCheckLine,
-  RiChat1Line,
+  RiPushpinLine,
+  RiShare2Line,
+  RiShieldLine,
+  RiUnpinLine,
   RiDashboardLine,
   RiPulseLine,
   RiImageLine,
 } from '@remixicon/react';
-
-import { cn } from '@/lib/utils';
+import { sessionEvents } from '@/lib/sessionEvents';
+import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
+import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { useChatFoldersStore, type ChatFolder } from '@/stores/useChatFoldersStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+import type { WorktreeMetadata } from '@/types/worktree';
+import { opencodeClient } from '@/lib/opencode/client';
+import { checkIsGitRepository } from '@/lib/gitApi';
+import { getSafeStorage } from '@/stores/utils/safeStorage';
+import { createWorktreeOnly, createWorktreeSession } from '@/lib/worktreeSessionCreator';
+import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
+import { useGitStore } from '@/stores/useGitStore';
+import { useDeviceInfo } from '@/lib/device';
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { updateDesktopSettings } from '@/lib/persistence';
+import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
+import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
+import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
+import { BranchPickerDialog } from './BranchPickerDialog';
+import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
+import { SessionFolderItem } from './SessionFolderItem';
 
-// --- Helpers ---
+const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
-const dropAnimation: DropAnimation = {
-  sideEffects: defaultDropAnimationSideEffects({
-    styles: {
-      active: {
-        opacity: '0.4',
-      },
-    },
-  }),
+const getAttentionDiamondDelay = (index: number): string => {
+  return index === 4 ? '0ms' : '130ms';
 };
 
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
@@ -671,181 +699,236 @@ const SortableGroupItemBase: React.FC<{
     attributes,
     listeners,
     setNodeRef,
-    transform,
-    transition,
     isDragging,
-    isOver,
-  } = useSortable({
-    id: folder.id,
-    data: { type: 'folder', folder },
-  });
+  } = useSortable({ id });
 
-  const [isRenaming, setIsRenaming] = React.useState(false);
-  const [renameValue, setRenameValue] = React.useState(folder.name);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    marginLeft: `${depth * 12}px`,
-  };
-
-  const handleRenameSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (renameValue.trim()) {
-      onRenameFolder(folder.id, renameValue.trim());
-      setIsRenaming(false);
-    }
-  };
-
-  if (isDragging) {
-    return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        className="h-8 bg-interactive-selection/20 border border-interactive-selection rounded-md opacity-50 mb-1"
-      />
-    );
-  }
-
   return (
-    <div ref={setNodeRef} style={style} className="group/folder mb-1">
-      <div
-        className={cn(
-          "flex items-center gap-1.5 h-8 px-2 rounded-md hover:bg-interactive-hover cursor-pointer text-muted-foreground hover:text-foreground transition-colors relative",
-          isOver && "bg-interactive-selection/30 border border-interactive-selection text-foreground ring-1 ring-interactive-selection/50",
-          isRenaming && "bg-interactive-hover"
-        )}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          setIsRenaming(true);
-        }}
-        {...attributes}
-        {...listeners}
-      >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleCollapse(folder.id);
-          }}
-          className="p-0.5 hover:bg-black/5 dark:hover:bg-white/10 rounded"
-        >
-          <RiArrowRightSLine
-            className={cn(
-              "w-4 h-4 transition-transform duration-200",
-              !folder.isCollapsed && "rotate-90"
-            )}
-          />
-        </button>
-
-        <RiFolderLine className="w-4 h-4 shrink-0" />
-
-        {isRenaming ? (
-          <form onSubmit={handleRenameSubmit} className="flex-1 flex items-center gap-1 min-w-0">
-            <input
-              autoFocus
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setIsRenaming(false);
-                if (e.key === ' ' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.stopPropagation();
-              }}
-              className="flex-1 bg-transparent border-none outline-none text-sm h-6 px-1 min-w-0 typography-ui-label"
-              onClick={(e) => e.stopPropagation()}
+    <div ref={setNodeRef} className={cn('relative', isDragging && 'opacity-40')}>
+      {!hideHeader ? (
+        <>
+          {/* Sentinel for sticky detection */}
+          {isDesktopShell && (
+            <div
+              ref={sentinelRef}
+              data-project-id={id}
+              className="absolute top-0 h-px w-full pointer-events-none"
+              aria-hidden="true"
             />
-            <button
-              type="submit"
-              className="p-0.5 text-muted-foreground hover:text-foreground hover:bg-interactive-hover rounded transition-colors shrink-0"
-              title="Save"
-              onMouseDown={(e) => e.preventDefault()}
+          )}
+
+          {/* Project header - sticky like workspace groups */}
+          <div
+            className={cn(
+              'sticky top-0 z-10 pt-2 pb-1.5 w-full text-left cursor-pointer group/project border-b select-none',
+              !isDesktopShell && 'bg-sidebar',
+            )}
+            style={{
+              backgroundColor: isDesktopShell
+                ? isStuck ? 'var(--sidebar-stuck-bg)' : 'transparent'
+                : undefined,
+              borderColor: isHovered
+                ? 'var(--color-border-hover)'
+                : isCollapsed
+                  ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
+                  : 'var(--color-border)'
+            }}
+            onMouseEnter={() => onHoverChange(true)}
+            onMouseLeave={() => onHoverChange(false)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              if (!isRenaming) {
+                setIsMenuOpen(true);
+              }
+            }}
+          >
+        <div className="relative flex items-center gap-1 px-1" {...attributes}>
+          {isRenaming ? (
+            <form
+              className="flex min-w-0 flex-1 items-center gap-2"
+              data-keyboard-avoid="true"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onRenameSave();
+              }}
             >
-              <RiCheckLine className="w-3.5 h-3.5" />
-            </button>
-          </form>
-        ) : (
-          <span className="flex-1 text-sm truncate select-none font-medium typography-ui-label">
-            {folder.name}
-          </span>
-        )}
-
-        <div className={cn("flex items-center gap-0.5 transition-opacity", isMenuOpen ? "opacity-100" : "opacity-0 group-hover/folder:opacity-100")}>
-          <button
-            className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded"
-            title="New Chat in folder"
-            onClick={(e) => { e.stopPropagation(); onCreateSession(folder.id); }}
-          >
-            <RiAddLine className="w-3.5 h-3.5" />
-          </button>
-          <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <RiMore2Line className="w-3.5 h-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => setIsRenaming(true)}>
-                <RiPencilAiLine className="w-4 h-4 mr-2" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onCreateSubfolder(folder.id)}>
-                <RiFolderAddLine className="w-4 h-4 mr-2" />
-                New Subfolder
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onDeleteFolder(folder.id)}
-                className="text-destructive focus:text-destructive"
-              >
-                <RiDeleteBinLine className="w-4 h-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {!folder.isCollapsed && (
-        <div className="flex flex-col">
-          <SortableContext
-            items={[...childFolders.map(f => f.id), ...sessions.map(s => s.id)]}
-            strategy={verticalListSortingStrategy}
-          >
-            {childFolders.map((child) => renderFolder(child, depth + 1))}
-            {sessions.map((session) => (
-              <SessionItem
-                key={session.id}
-                session={session}
-                isActive={session.id === activeSessionId}
-                onClick={() => onSelectSession(session.id)}
-                depth={depth + 1}
+              <input
+                value={renameValue}
+                onChange={(event) => onRenameValueChange(event.target.value)}
+                className="flex-1 min-w-0 bg-transparent typography-ui-label outline-none placeholder:text-muted-foreground"
+                autoFocus
+                placeholder="Rename project"
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.stopPropagation();
+                    onRenameCancel();
+                    return;
+                  }
+                  if (event.key === ' ' || event.key === 'Enter') {
+                    event.stopPropagation();
+                  }
+                }}
               />
-            ))}
-          </SortableContext>
-          {childFolders.length === 0 && sessions.length === 0 && (
-             <div 
-               className="h-8 flex items-center text-xs text-muted-foreground/50 italic select-none typography-micro"
-               style={{ paddingLeft: `${(depth + 1) * 12 + 28}px` }}
-             >
-               Empty folder
-             </div>
+              <button
+                type="submit"
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <RiCheckLine className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={onRenameCancel}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <RiCloseLine className="size-4" />
+              </button>
+            </form>
+          ) : (
+            <Tooltip delayDuration={1500}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  {...listeners}
+                  className="flex-1 min-w-0 flex items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-sm cursor-grab active:cursor-grabbing"
+                >
+                  <span className={cn(
+                    "typography-ui font-semibold truncate",
+                    isActiveProject ? "text-primary" : "text-foreground group-hover/project:text-foreground"
+                  )}>
+                    {projectLabel}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                {projectDescription}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {!isRenaming ? (
+            <DropdownMenu
+              open={isMenuOpen}
+              onOpenChange={setIsMenuOpen}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
+                    mobileVariant ? 'opacity-70' : 'opacity-0 group-hover/project:opacity-100',
+                  )}
+                  aria-label="Project menu"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <RiMore2Line className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[180px]">
+                {showCreateButtons && isRepo && !hideDirectoryControls && settingsAutoCreateWorktree && onNewSession && (
+                  <DropdownMenuItem onClick={onNewSession}>
+                    <RiAddLine className="mr-1.5 h-4 w-4" />
+                    New Session
+                  </DropdownMenuItem>
+                )}
+                {showCreateButtons && isRepo && !hideDirectoryControls && !settingsAutoCreateWorktree && onNewWorktreeSession && (
+                  <DropdownMenuItem onClick={onNewWorktreeSession}>
+                    <RiGitBranchLine className="mr-1.5 h-4 w-4" />
+                    New Session in Worktree
+                  </DropdownMenuItem>
+                )}
+                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubIssue && (
+                  <DropdownMenuItem onClick={onNewSessionFromGitHubIssue}>
+                    <RiGithubLine className="mr-1.5 h-4 w-4" />
+                    New session from GitHub issue
+                  </DropdownMenuItem>
+                )}
+                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubPR && (
+                  <DropdownMenuItem onClick={onNewSessionFromGitHubPR}>
+                    <RiGitPullRequestLine className="mr-1.5 h-4 w-4" />
+                    New session from GitHub PR
+                  </DropdownMenuItem>
+                )}
+                {showCreateButtons && isRepo && !hideDirectoryControls && (
+                  <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
+                    <ArrowsMerge className="mr-1.5 h-4 w-4" />
+                    New Multi-Run
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={onRenameStart}>
+                  <RiPencilAiLine className="mr-1.5 h-4 w-4" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={onClose}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <RiCloseLine className="mr-1.5 h-4 w-4" />
+                  Close Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+
+          {showCreateButtons && isRepo && !hideDirectoryControls && onNewWorktreeSession && settingsAutoCreateWorktree && !isRenaming && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNewWorktreeSession();
+                  }}
+                  className={cn(
+                    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground hover:bg-interactive-hover/50 flex-shrink-0',
+                    mobileVariant ? 'opacity-70' : 'opacity-100',
+                  )}
+                  aria-label="New session in worktree"
+                >
+                  <RiGitBranchLine className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                <p>New session in worktree</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {showCreateButtons && (!settingsAutoCreateWorktree || !isRepo) && !isRenaming && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNewSession();
+                  }}
+                  className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-label="New session"
+                >
+                  <RiAddLine className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                <p>New session</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
-      )}
+          </div>
+        </>
+      ) : null}
+
+      {/* Children (workspace groups and sessions) */}
+      {children}
     </div>
   );
 };
 
-interface SessionItemProps {
-  session: Session;
-  isActive: boolean;
-  onClick: () => void;
-  depth?: number;
-}
-
-const SessionItem = ({ session, isActive, onClick, depth = 0 }: SessionItemProps) => {
+const SortableGroupItemBase: React.FC<{
+  id: string;
+  children: React.ReactNode;
+}> = ({ id, children }) => {
   const {
     attributes,
     listeners,
@@ -853,39 +936,7 @@ const SessionItem = ({ session, isActive, onClick, depth = 0 }: SessionItemProps
     transform,
     transition,
     isDragging,
-  } = useSortable({
-    id: session.id,
-    data: { type: 'session', session },
-  });
-
-  const { updateSessionTitle, deleteSession } = useSessionStore();
-  const [isRenaming, setIsRenaming] = React.useState(false);
-  const [renameValue, setRenameValue] = React.useState(session.title || 'Untitled Session');
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    marginLeft: `${depth * 12}px`,
-  };
-
-  const handleRenameSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (renameValue.trim()) {
-      await updateSessionTitle(session.id, renameValue.trim());
-      setIsRenaming(false);
-    }
-  };
-
-  if (isDragging) {
-    return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        className="h-8 bg-interactive-selection/20 border border-interactive-selection rounded-md opacity-50 mb-0.5"
-      />
-    );
-  }
+  } = useSortable({ id });
 
   return (
     <div
@@ -898,71 +949,10 @@ const SessionItem = ({ session, isActive, onClick, depth = 0 }: SessionItemProps
         'space-y-0.5 rounded-md',
         isDragging && 'opacity-50',
       )}
-      onClick={onClick}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        setIsRenaming(true);
-      }}
       {...attributes}
       {...listeners}
     >
-      <RiChat1Line className={cn("w-4 h-4 shrink-0", isActive ? "text-primary" : "opacity-70")} />
-
-      {isRenaming ? (
-        <form onSubmit={handleRenameSubmit} className="flex-1 flex items-center min-w-0">
-          <input
-            autoFocus
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={async () => {
-                if (renameValue.trim()) {
-                    await updateSessionTitle(session.id, renameValue.trim());
-                }
-                setIsRenaming(false);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setIsRenaming(false);
-              if (e.key === ' ' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.stopPropagation();
-            }}
-            className="flex-1 bg-transparent border-none outline-none text-sm h-6 px-1 min-w-0 typography-ui-label"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </form>
-      ) : (
-        <span className="flex-1 text-sm truncate select-none typography-ui-label">
-          {session.title || 'Untitled Session'}
-        </span>
-      )}
-
-      <div className={cn("flex items-center transition-opacity", isMenuOpen ? "opacity-100" : "opacity-0 group-hover/session:opacity-100", isActive && "opacity-100")}>
-        <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <RiMore2Line className="w-3.5 h-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => setIsRenaming(true)}>
-              <RiPencilAiLine className="w-4 h-4 mr-2" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={async () => {
-                await deleteSession(session.id);
-                toast.success('Session deleted');
-              }}
-              className="text-destructive focus:text-destructive"
-            >
-              <RiDeleteBinLine className="w-4 h-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {children}
     </div>
   );
 };
@@ -972,11 +962,11 @@ const SortableGroupItem = React.memo(SortableGroupItemBase);
 
 
 interface SessionSidebarProps {
-  hideProjectSelector?: boolean;
   mobileVariant?: boolean;
+  onSessionSelected?: (sessionId: string) => void;
   allowReselect?: boolean;
-  onSessionSelected?: (id: string) => void;
   hideDirectoryControls?: boolean;
+  hideProjectSelector?: boolean;
   showOnlyMainWorkspace?: boolean;
 }
 
@@ -1188,11 +1178,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [flushCollapsedProjectsPersist, isVSCode]);
 
   React.useEffect(() => {
-    if (isRenaming) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [isRenaming]);
+    return () => {
+      if (typeof window !== 'undefined' && persistCollapsedProjectsTimer.current !== null) {
+        window.clearTimeout(persistCollapsedProjectsTimer.current);
+      }
+      persistCollapsedProjectsTimer.current = null;
+      pendingCollapsedProjects.current = null;
+    };
+  }, []);
 
   const togglePinnedSession = React.useCallback((sessionId: string) => {
     setPinnedSessionIds((prev) => {
@@ -2230,15 +2223,49 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     activeProjectId,
     activeSessionByProject,
     currentSessionId,
-    setCurrentSession,
+    handleSessionSelect,
+    isVSCode,
+    newSessionDraftOpen,
+    mobileVariant,
     openNewSessionDraft,
-  } = useSessionStore();
+    projectSections,
+    projectSessionMeta,
+    setActiveMainTab,
+    setSessionSwitcherOpen,
+  ]);
 
-  const { setActiveMainTab } = useUIStore();
+  React.useEffect(() => {
+    if (!activeProjectId || !currentSessionId) {
+      return;
+    }
+    const projectMap = projectSessionMeta.metaByProject.get(activeProjectId);
+    if (!projectMap || !projectMap.has(currentSessionId)) {
+      return;
+    }
+    setActiveSessionByProject((prev) => {
+      if (prev.get(activeProjectId) === currentSessionId) {
+        return prev;
+      }
+      const next = new Map(prev);
+      next.set(activeProjectId, currentSessionId);
+      return next;
+    });
+  }, [activeProjectId, currentSessionId, projectSessionMeta]);
 
-  // Active drag item state for DragOverlay preview
-  const [activeDragData, setActiveDragData] = React.useState<{ type: 'session' | 'folder'; id: string; title: string } | null>(null);
-  const [isChatCollapsed, setIsChatCollapsed] = React.useState(false);
+  const currentSessionDirectory = React.useMemo(() => {
+    if (!currentSessionId) {
+      return null;
+    }
+    const metadataPath = worktreeMetadata.get(currentSessionId)?.path;
+    if (metadataPath) {
+      return normalizePath(metadataPath) ?? metadataPath;
+    }
+    const activeSession = sessions.find((session) => session.id === currentSessionId);
+    if (!activeSession) {
+      return null;
+    }
+    return normalizePath((activeSession as Session & { directory?: string | null }).directory ?? null);
+  }, [currentSessionId, sessions, worktreeMetadata]);
 
   const getOrderedGroups = React.useCallback(
     (projectId: string, groups: SessionGroup[]) => {
@@ -3166,116 +3193,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     })
   );
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    const type = active.data.current?.type as 'session' | 'folder';
-    if (type === 'session') {
-      const session = active.data.current?.session;
-      setActiveDragData({ type: 'session', id: active.id as string, title: session?.title || 'Untitled Session' });
-    } else if (type === 'folder') {
-      const folder = active.data.current?.folder;
-      setActiveDragData({ type: 'folder', id: active.id as string, title: folder?.name || 'Folder' });
-    }
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    setActiveDragData(null);
-    const { active, over } = event;
-
-    if (!over) return;
-
-    const activeId = active.id as string;
-    const overId = over.id as string;
-    const activeType = active.data.current?.type;
-    const overType = over.data.current?.type;
-    
-    // Self-drop check
-    if (activeId === overId) return;
-
-    // 1. Dragging Folder
-    if (activeType === 'folder') {
-        const activeFolder = folders.find(f => f.id === activeId);
-        const overFolder = folders.find(f => f.id === overId);
-
-        if (activeFolder && overFolder) {
-             // Case 1: Dropping folder into another folder
-             if (overType === 'folder') {
-                  // Move folder into the target folder
-                  const targetFolderChildren = folders
-                     .filter(f => f.parentId === overId)
-                     .sort((a, b) => a.order - b.order);
-                  const newOrder = targetFolderChildren.length > 0 
-                     ? Math.max(...targetFolderChildren.map(f => f.order)) + 1 
-                     : 0;
-                  
-                  moveFolder(activeId, overId, newOrder);
-             }
-             // Case 2: Reordering siblings (same parent)
-             else if (activeFolder.parentId === overFolder.parentId) {
-                  const siblings = folders.filter(f => f.parentId === activeFolder.parentId)
-                     .sort((a, b) => a.order - b.order);
-                  
-                  const oldIndex = siblings.findIndex(f => f.id === activeId);
-                  const newIndex = siblings.findIndex(f => f.id === overId);
-                  
-                  const newSiblings = arrayMove(siblings, oldIndex, newIndex);
-                  reorderFolders(activeFolder.parentId, newSiblings.map(f => f.id));
-             }
-        }
-    }
-
-    // 2. Dragging Session
-    if (activeType === 'session') {
-        const activeSessionId = activeId;
-        
-        // If dropped over a folder, assign to that folder
-        if (overType === 'folder') {
-            assignSession(activeSessionId, overId);
-        } 
-        // If dropped over another session, assign to the same folder as that session
-        else if (overType === 'session') {
-            const targetFolderId = sessionFolderMap[overId] ?? null;
-            assignSession(activeSessionId, targetFolderId);
-        }
-    }
-  };
-
-  // Build Hierarchy
-  const getFolderSessions = (folderId: string | null) => {
-    return sessions
-      .filter((s) => (sessionFolderMap[s.id] ?? null) === folderId)
-      .sort(compareSessions);
-  };
-
-  const getSubfolders = (parentId: string | null) => {
-    return folders
-      .filter((f) => f.parentId === parentId)
-      .sort((a, b) => a.order - b.order);
-  };
-
-  const renderFolderRecursive = (folder: ChatFolder, depth: number = 0) => {
-    return (
-      <FolderItem
-        key={folder.id}
-        folder={folder}
-        depth={depth}
-        sessions={getFolderSessions(folder.id)}
-        childFolders={getSubfolders(folder.id)}
-        activeSessionId={currentSessionId}
-        onSelectSession={(id) => {
-            setCurrentSession(id);
-            setActiveMainTab('chat');
-        }}
-        onToggleCollapse={toggleFolderCollapse}
-        onRenameFolder={renameFolder}
-        onDeleteFolder={deleteFolder}
-        onCreateSubfolder={(parentId) => createFolder('New Folder', parentId)}
-        onCreateSession={(folderId) => openNewSessionDraft({ parentID: folderId })}
-        renderFolder={renderFolderRecursive}
-      />
-    );
-  };
-
   return (
     <div
       className={cn(
@@ -3539,23 +3456,43 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             </div>
           ) : null}
         </div>
+      )}
 
-        {!isChatCollapsed && <div className="flex-1 overflow-y-auto p-2 min-h-0">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
+      {/* Aiko navigation sections */}
+      {!mobileVariant && (
+        <>
+          <div className="border-b border-border/40">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3.5 py-2 text-sm font-semibold text-foreground hover:bg-interactive-hover transition-colors"
+              onClick={() => setActiveMainTab('dashboard')}
             >
-              <SortableContext
-                items={[
-                    ...getSubfolders(null).map(f => f.id),
-                    ...getFolderSessions(null).map(s => s.id)
-                ]}
-                strategy={verticalListSortingStrategy}
-              >
-                {/* Root Level Folders */}
-                {getSubfolders(null).map((folder) => renderFolderRecursive(folder))}
+              <RiDashboardLine className="h-4 w-4 flex-shrink-0" />
+              <span>Dashboard</span>
+            </button>
+          </div>
+          <div className="border-b border-border/40">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3.5 py-2 text-sm font-semibold text-foreground hover:bg-interactive-hover transition-colors"
+              onClick={() => setActiveMainTab('analyzer')}
+            >
+              <RiPulseLine className="h-4 w-4 flex-shrink-0" />
+              <span>Pipeline Analyzer</span>
+            </button>
+          </div>
+          <div className="border-b border-border/40">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3.5 py-2 text-sm font-semibold text-foreground hover:bg-interactive-hover transition-colors"
+              onClick={() => setActiveMainTab('image-studio')}
+            >
+              <RiImageLine className="h-4 w-4 flex-shrink-0" />
+              <span>Image Studio</span>
+            </button>
+          </div>
+        </>
+      )}
 
                 return (
                   <SortableProjectItem

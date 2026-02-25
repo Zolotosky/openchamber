@@ -182,6 +182,7 @@ export const LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG: Record<SidebarSection, Set
   usage: 'usage',
   'git-identities': 'git',
   settings: 'home',
+  aiko: 'aiko',
 };
 
 export function getSettingsPageMeta(slug: string): SettingsPageMeta | null {
